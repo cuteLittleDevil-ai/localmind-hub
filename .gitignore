@@ -28,6 +28,10 @@ go.work.sum
 # env file
 .env
 
+# Local SQLite and runtime data
+data/*
+!data/.gitkeep
+
 # Editor/IDE
 # .idea/
 # .vscode/

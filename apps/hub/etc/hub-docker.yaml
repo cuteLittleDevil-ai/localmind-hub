@@ -1,0 +1,20 @@
+Name: hub
+Host: 0.0.0.0
+Port: 8888
+Timeout: 30000
+
+Auth:
+  DemoToken: localmind-demo-token
+
+Data:
+  SqlitePath: data/localmind.db
+
+Redis:
+  Addr: redis:6379
+
+Mongo:
+  URI: mongodb://mongo:27017
+  Database: localmind
+
+Mqtt:
+  Broker: tcp://emqx:1883
