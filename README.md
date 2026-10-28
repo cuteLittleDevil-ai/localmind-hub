@@ -2,7 +2,7 @@
 
 本地优先的 AIoT Agent 中枢（面试作品集）。设备 MQTT 入网与影子、端侧 LLM 工具控设备、本地台账与会话记忆；详见定稿文档。
 
-当前代码进度：**M1-1～M1-3**（hub 骨架、Compose 依赖、health / 鉴权）。设备域、mqttx、Agent 等在后续里程碑实现。
+当前代码进度：**M1（L1）** — Compose 依赖、hub、SQLite 设备台账、`pkg/mqttx`、设备 HTTP API、虚拟灯与验收脚本。
 
 ## 文档
 
@@ -47,16 +47,52 @@ localmind-demo-token
 curl -s http://127.0.0.1:8888/api/v1/health | jq .
 ```
 
-**其它 API 需带 Token**（M1 仅 health；后续设备/Agent 接口同样规则）：
+**其它 API 需带 Token**：
 
 ```bash
-curl -s -H "Authorization: Bearer localmind-demo-token" \
-  http://127.0.0.1:8888/api/v1/health
+export TOKEN=localmind-demo-token
+export HUB=http://127.0.0.1:8888
+```
+
+### 4. 虚拟灯（L1）
+
+另开终端，在仓库根目录：
+
+```bash
+go run ./demo/virtual-light -broker tcp://127.0.0.1:1883 -device light-living-01 -room living
+```
+
+### 5. L1 验收（注册 → 在线 → 控灯）
+
+确保依赖、hub、虚拟灯均已启动后：
+
+```bash
+chmod +x demo/scripts/l1-smoke.sh
+./demo/scripts/l1-smoke.sh
+```
+
+或手动 curl：
+
+```bash
+# 注册
+curl -s -H "Authorization: Bearer localmind-demo-token" -H "Content-Type: application/json" \
+  -X POST "$HUB/api/v1/devices" -d '{"deviceId":"light-living-01","type":"light","name":"客厅灯","room":"living"}' | jq .
+
+# 列表
+curl -s -H "Authorization: Bearer localmind-demo-token" "$HUB/api/v1/devices?room=living" | jq .
+
+# 控制亮度
+curl -s -H "Authorization: Bearer localmind-demo-token" -H "Content-Type: application/json" \
+  -X POST "$HUB/api/v1/devices/light-living-01/control" \
+  -d '{"idempotencyKey":"demo-1","action":"set","params":{"brightness":30},"timeoutMs":5000}' | jq .
+
+# 影子
+curl -s -H "Authorization: Bearer localmind-demo-token" "$HUB/api/v1/devices/light-living-01" | jq .
 ```
 
 依赖未就绪时 health 仍返回 JSON，整体 `status` 为 `degraded`、HTTP **503**，进程不会因此退出。
 
-### 4. 可选：Compose 一并启动 Hub 容器
+### 6. 可选：Compose 一并启动 Hub 容器
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d --build hub
@@ -66,6 +102,7 @@ docker compose -f deploy/docker-compose.yml up -d --build hub
 
 ```bash
 go build -o bin/hub ./apps/hub
+go build -o bin/virtual-light ./demo/virtual-light
 go test ./...
 ```
 

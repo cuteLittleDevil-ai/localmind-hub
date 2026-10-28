@@ -15,6 +15,31 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/v1/health",
 				Handler: healthHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/devices",
+				Handler: listDevicesHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/devices/:deviceId",
+				Handler: getDeviceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/devices",
+				Handler: registerDeviceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/devices/:deviceId/control",
+				Handler: controlDeviceHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/devices/:deviceId/unbind",
+				Handler: unbindDeviceHandler(serverCtx),
+			},
 		},
 	)
 }

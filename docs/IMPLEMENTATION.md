@@ -25,7 +25,7 @@
 | 阶段 | 主题 | 验收 | 建议产出 |
 |------|------|------|----------|
 | **M0** | 文档基线 | 仓 + PRD/SPEC/architecture | **已完成**（PR #1 已合；#2 architecture 待合） |
-| **M1** | 连接 + 设备台账 | **L1** | Compose 依赖 + hub 骨架 + mqttx + device API + demo 灯 |
+| **M1** | 连接 + 设备台账 | **L1** | Compose 依赖 + hub 骨架 + mqttx + device API + demo 灯（**M1-1～M1-3 已合 PR #4**） |
 | **M2** | Agent 控灯 | **L2** | Ollama 客户端 + 3 tools + chat API + 会话落 Mongo |
 | **M3** | 本地优先与讲述 | **L3** | 断网脚本/说明、diagnose、Demo 录屏清单、README 一键跑通 |
 | **M4** | 加分（可选） | 非阻断 | Kafka 事件总线占位/一页、k8s 精简、简单压测笔记 |

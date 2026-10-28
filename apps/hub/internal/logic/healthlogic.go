@@ -69,6 +69,9 @@ func (l *HealthLogic) checkMongo() types.Check {
 }
 
 func (l *HealthLogic) checkMQTT() types.Check {
+	if l.svcCtx.Mqtt != nil && l.svcCtx.Mqtt.IsConnected() {
+		return types.Check{OK: true, Message: "connected"}
+	}
 	broker := l.svcCtx.Config.Mqtt.Broker
 	addr := strings.TrimPrefix(broker, "tcp://")
 	addr = strings.TrimPrefix(addr, "mqtt://")
