@@ -8,6 +8,7 @@
 - [产品需求（docs/PRD.md）](./docs/PRD.md)
 - [技术规格（docs/SPEC.md）](./docs/SPEC.md)
 - [架构说明（docs/architecture.md）](./docs/architecture.md) — Things 对照与模块边界
+- [业务代码实现计划（docs/IMPLEMENTATION.md）](./docs/IMPLEMENTATION.md) — 里程碑任务拆解
 
 > **§8 已拍板**；在用户明确说「可以开工」前，本仓仅含文档，不含业务代码。
 

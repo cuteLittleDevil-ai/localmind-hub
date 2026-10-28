@@ -65,7 +65,8 @@ localmind-hub/
 ├── docs/
 │   ├── PRD.md
 │   ├── SPEC.md
-│   └── architecture.md
+│   ├── architecture.md
+│   └── IMPLEMENTATION.md
 └── REQUIREMENTS.md
 ```
 
