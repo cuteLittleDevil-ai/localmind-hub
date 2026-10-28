@@ -40,6 +40,16 @@ func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
 				Path:    "/api/v1/devices/:deviceId/unbind",
 				Handler: unbindDeviceHandler(serverCtx),
 			},
+			{
+				Method:  http.MethodPost,
+				Path:    "/api/v1/agent/chat",
+				Handler: chatHandler(serverCtx),
+			},
+			{
+				Method:  http.MethodGet,
+				Path:    "/api/v1/agent/sessions/:sessionId",
+				Handler: getSessionHandler(serverCtx),
+			},
 		},
 	)
 }
