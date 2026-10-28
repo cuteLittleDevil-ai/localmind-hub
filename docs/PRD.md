@@ -166,6 +166,7 @@
 - `REQUIREMENTS.md`：需求整理（上游）  
 - `docs/PRD.md`：本文，产品范围与验收  
 - `docs/SPEC.md`：技术规格讨论稿（接口 / MQTT / 数据模型）
-- `docs/architecture.md`：Things 对照与模块边界（架构叙事）  
+- `docs/architecture.md`：Things 对照与模块边界（架构叙事）
+- `docs/IMPLEMENTATION.md`：业务代码实现计划（里程碑任务拆解）  
 
-**本文档与 SPEC 确认前禁止实现业务代码。**
+**用户说「可以开工」前禁止实现业务代码；实现顺序见 `docs/IMPLEMENTATION.md`。**
