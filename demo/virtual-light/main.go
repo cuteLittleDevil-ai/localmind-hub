@@ -1,4 +1,5 @@
 // Virtual light simulates a demo MQTT device (M1-7): handles down, sends ack and up.
+// 虚拟灯主循环：订阅 down 改亮度 → ack → 周期/变更发 up，供 L1/L2/L3 本地演示。
 package main
 
 import (

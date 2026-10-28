@@ -8,6 +8,7 @@ import (
 )
 
 func RegisterHandlers(server *rest.Server, serverCtx *svc.ServiceContext) {
+	// HTTP 面：health 免鉴权；设备 CRUD/控制；Agent chat 与会话查询（SPEC §4）。
 	server.AddRoutes(
 		[]rest.Route{
 			{

@@ -6,11 +6,19 @@ import (
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Store persists agent sessions and messages (SPEC §5.2).
+// 事件类型与 SPEC §5.2 events 集合一致。
+const (
+	EventTypeDiagnose       = "diagnose"
+	EventTypeOfflineTimeout = "offline_timeout"
+	EventTypeControlFail    = "control_fail"
+)
+
+// Store 持久化 Agent 会话、消息与设备诊断/控制事件（Mongo）。
 type Store struct {
 	db *mongo.Database
 }
@@ -32,6 +40,15 @@ type Message struct {
 	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
 }
 
+// Event 设备侧诊断与控制失败记录（events 集合）。
+type Event struct {
+	ID        string         `bson:"_id,omitempty" json:"id,omitempty"`
+	DeviceID  string         `bson:"deviceId" json:"deviceId"`
+	Type      string         `bson:"type" json:"type"`
+	Payload   map[string]any `bson:"payload" json:"payload"`
+	CreatedAt time.Time      `bson:"createdAt" json:"createdAt"`
+}
+
 func NewStore(client *mongo.Client, database string) *Store {
 	return &Store{db: client.Database(database)}
 }
@@ -47,7 +64,38 @@ func (s *Store) EnsureIndexes(ctx context.Context) error {
 	_, err = s.db.Collection("messages").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.D{{Key: "sessionId", Value: 1}, {Key: "createdAt", Value: 1}},
 	})
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Collection("events").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{{Key: "deviceId", Value: 1}, {Key: "createdAt", Value: -1}},
+	})
 	return err
+}
+
+// InsertEvent 写入设备事件，返回 Mongo ObjectId 十六进制字符串。
+func (s *Store) InsertEvent(ctx context.Context, deviceID, eventType string, payload map[string]any) (string, error) {
+	if s == nil || s.db == nil {
+		return "", mongo.ErrClientDisconnected
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	doc := Event{
+		DeviceID:  deviceID,
+		Type:      eventType,
+		Payload:   payload,
+		CreatedAt: time.Now().UTC(),
+	}
+	res, err := s.db.Collection("events").InsertOne(ctx, doc)
+	if err != nil {
+		return "", err
+	}
+	oid, ok := res.InsertedID.(primitive.ObjectID)
+	if !ok {
+		return "", nil
+	}
+	return oid.Hex(), nil
 }
 
 // GetOrCreateSession returns existing or new session id.

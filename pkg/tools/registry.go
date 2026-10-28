@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/cuteLittleDevil-ai/localmind-hub/pkg/device"
 	"github.com/cuteLittleDevil-ai/localmind-hub/pkg/llm"
+	mem "github.com/cuteLittleDevil-ai/localmind-hub/pkg/memory/mongo"
 	"github.com/cuteLittleDevil-ai/localmind-hub/pkg/store/sqlite"
 )
 
@@ -29,15 +31,22 @@ type DeviceAPI interface {
 	Control(ctx context.Context, deviceID string, req *device.ControlRequest) (*device.ControlResult, error)
 	IsOnline(ctx context.Context, deviceID string) bool
 	GetShadow(ctx context.Context, deviceID string) (map[string]any, error)
+	LastSeen(ctx context.Context, deviceID string) (time.Time, bool)
 }
 
-// Registry executes whitelisted tools via device domain (no direct MQTT).
+// EventWriter 写入 Mongo events（diagnose / offline_timeout）；可为 nil。
+type EventWriter interface {
+	InsertEvent(ctx context.Context, deviceID, eventType string, payload map[string]any) (string, error)
+}
+
+// Registry 白名单三工具，经 device 域执行，禁止旁路 MQTT。
 type Registry struct {
 	devices DeviceAPI
+	events  EventWriter
 }
 
-func NewRegistry(devices DeviceAPI) *Registry {
-	return &Registry{devices: devices}
+func NewRegistry(devices DeviceAPI, events EventWriter) *Registry {
+	return &Registry{devices: devices, events: events}
 }
 
 // LLMToolDefinitions returns OpenAI tool schemas.
@@ -79,7 +88,7 @@ func (r *Registry) LLMToolDefinitions() []llm.ToolDef {
 			Type: "function",
 			Function: llm.FunctionSpec{
 				Name:        DeviceDiagnose,
-				Description: "诊断设备在线状态与影子摘要。",
+				Description: "诊断设备在线状态、最后上报时间与影子摘要；异常时会写入诊断事件。",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
@@ -218,6 +227,7 @@ func (r *Registry) runDiagnose(ctx context.Context, args map[string]any) (map[st
 		return nil, errors.New("deviceId required")
 	}
 	online := r.devices.IsOnline(ctx, deviceID)
+	lastSeen, hasLastSeen := r.devices.LastSeen(ctx, deviceID)
 	sh, err := r.devices.GetShadow(ctx, deviceID)
 	if err != nil && !errors.Is(err, device.ErrDeviceNotFound) {
 		return nil, err
@@ -227,13 +237,50 @@ func (r *Registry) runDiagnose(ctx context.Context, args map[string]any) (map[st
 		status = "online"
 	}
 	hints := []string{}
+	eventType := mem.EventTypeDiagnose
 	if !online {
+		eventType = mem.EventTypeOfflineTimeout
 		hints = append(hints, "设备当前不在线，请确认虚拟灯或真实设备已连接 MQTT")
+		if hasLastSeen {
+			age := time.Since(lastSeen)
+			hints = append(hints, fmt.Sprintf("最后一次 up 约 %d 秒前", int(age.Seconds())))
+			if age > 90*time.Second {
+				hints = append(hints, "已超过在线 TTL（90s），可能被判定为离线超时")
+			}
+		} else {
+			hints = append(hints, "尚无 up 上报记录")
+		}
 	}
-	return map[string]any{
+
+	eventPayload := map[string]any{
+		"online": online, "status": status, "shadow": sh, "hints": hints,
+	}
+	if hasLastSeen {
+		eventPayload["lastSeenAt"] = lastSeen.UTC().Format(time.RFC3339)
+		eventPayload["lastSeenAgeSec"] = int(time.Since(lastSeen).Seconds())
+	}
+
+	var eventID string
+	if r.events != nil {
+		id, err := r.events.InsertEvent(ctx, deviceID, eventType, eventPayload)
+		if err != nil {
+			return nil, fmt.Errorf("write diagnose event: %w", err)
+		}
+		eventID = id
+	}
+
+	out := map[string]any{
 		"ok": true, "deviceId": deviceID, "online": online, "status": status,
-		"shadow": sh, "hints": hints,
-	}, nil
+		"shadow": sh, "hints": hints, "eventType": eventType,
+	}
+	if hasLastSeen {
+		out["lastSeenAt"] = lastSeen.UTC().Format(time.RFC3339)
+	}
+	if eventID != "" {
+		out["eventId"] = eventID
+		out["eventWritten"] = true
+	}
+	return out, nil
 }
 
 // ValidateToolName ensures LLM cannot call arbitrary tools.

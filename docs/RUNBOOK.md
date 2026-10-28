@@ -1,6 +1,16 @@
 # LocalMind Hub — 运行与验收手册（RUNBOOK）
 
-本文说明本地/Compose 启动顺序、端口、预期日志、常见 HTTP 行为，以及 **L1 / L2** 验收步骤。契约以 [SPEC.md](./SPEC.md) 为准。
+本文说明本地/Compose 启动顺序、端口、预期日志、常见 HTTP 行为，以及 **L1 / L2 / L3** 验收步骤。契约以 [SPEC.md](./SPEC.md) 为准。
+
+## 0. 端到端流程（面试可读）
+
+| 阶段 | 链路 |
+|------|------|
+| **M1** | 虚拟灯 MQTT `up` → Hub 更新 SQLite 台账与 Redis 在线/影子 → HTTP 注册/列表/控制（`down/ack`） |
+| **M2** | `POST /agent/chat` → Ollama + 白名单 tools → 内部仍经 device 域 MQTT 控灯 → Mongo sessions/messages |
+| **M3** | 仅内网 Compose + 本机 Ollama；断外网仍可 L2；重启后 SQLite/Mongo 可查；`device.diagnose` 与控灯失败写 Mongo `events` |
+
+Demo 一键命令与示例对话见 [DEMO.md](./DEMO.md)。
 
 ## 1. 启动顺序
 
@@ -9,7 +19,7 @@
 1. **Compose 依赖**：Redis、Mongo、EMQX（M2 起可选 Ollama）
 2. **Hub**：`apps/hub`（go-zero API，8888）
 3. **虚拟灯**：`demo/virtual-light`（MQTT 上行/执行 down）
-4. **验收**：`demo/scripts/l1-smoke.sh`（L1）或 `demo/scripts/l2-smoke.sh`（L2，需 Ollama）
+4. **验收**：`demo/scripts/l1-smoke.sh`（L1）、`l2-smoke.sh`（L2）、`l3-smoke.sh`（L3 本地优先抽检）
 
 ```bash
 # 仓库根目录
@@ -119,7 +129,63 @@ curl -s -H "Authorization: Bearer localmind-demo-token" \
 
 可选：`GET /api/v1/agent/sessions/:sessionId` 查看会话消息列表。
 
-## 8. 当前未启动 / 未实现项
+## 8. L3 断网仍可用（M3）
+
+**DoD**：断外网（或等价隔离）后仍能完成 L2；Hub 进程不依赖公网 API。
+
+### 8.1 本地优先检查清单（允许 / 禁止）
+
+| 允许（MVP） | 禁止（M3 不做） |
+|-------------|-----------------|
+| Docker Hub 已拉取的镜像：redis、mongo、emqx、ollama | 运行时访问 OpenAI / 云端 LLM |
+| Compose 内网：`127.0.0.1` / `redis` / `mongo` / `emqx` | Kafka、远程配置中心 |
+| 本机或 Compose 内 Ollama（`11434`） | Matter 真接入、完整用户体系 |
+| Hub ↔ MQTT ↔ 虚拟灯闭环 | 持久离线控制队列（offline 仍直接失败） |
+
+Hub 业务路径**不应**发起外网 HTTP；health 仅探测本地依赖。
+
+### 8.2 模拟断外网（可复现）
+
+任选其一（保留本机 `127.0.0.1` 与 Docker 网桥）：
+
+1. **关 Wi‑Fi / 拔网线**（最简单）：Compose 与 Ollama 仍在 localhost 时，执行 `./demo/scripts/l2-smoke.sh` 或手动 chat。  
+2. **防火墙挡默认路由外网**（Linux 示例，需 root，执行前请确认规则可回滚）：
+
+```bash
+# 示例：拒绝经默认网关的外出（保留 lo 与 docker0）
+sudo iptables -A OUTPUT ! -o lo -d 127.0.0.0/8 -j REJECT
+# 验收 L2 后删除规则或 reboot
+```
+
+3. **文档验收**：若环境不便真断网，按 [DEMO.md](./DEMO.md) 与 §8.1 清单确认无外网依赖，并跑 `./demo/scripts/l3-smoke.sh` 作本地抽检。
+
+### 8.3 diagnose 与 events
+
+停虚拟灯或等待 >90s 无 `up` 后，通过 Agent 触发诊断：
+
+```bash
+curl -s -H "Authorization: Bearer localmind-demo-token" -H "Content-Type: application/json" \
+  -X POST "$HUB_URL/api/v1/agent/chat" \
+  -d '{"message":"请诊断 light-living-01 是否在线"}' | jq .
+```
+
+Mongo `events` 集合应出现 `type` 为 `offline_timeout` 或 `diagnose` 的文档（字段见 SPEC §5.2）。控制离线/ack 超时会写 `control_fail`。
+
+```bash
+chmod +x demo/scripts/l3-smoke.sh
+./demo/scripts/l3-smoke.sh
+```
+
+## 9. 重启持久化抽检（M3-2）
+
+1. 完成 L1 或 L2，记下 `deviceId` 与 `sessionId`（若有）。  
+2. **停止 Hub**（Ctrl+C），Compose 依赖可保持运行。  
+3. 确认文件仍在：`data/localmind.db`（SQLite 设备台账）。  
+4. 确认 Mongo：`mongosh mongodb://127.0.0.1:27017/localmind --eval 'db.sessions.countDocuments()'`  
+5. **重新启动 Hub** + 虚拟灯。  
+6. `GET /api/v1/devices/:deviceId` 台账仍在；`GET /api/v1/agent/sessions/:sessionId` 历史消息仍在（Mongo 卷未删）。
+
+## 10. 当前未启动 / 未实现项
 
 | 项 | 说明 |
 |----|------|
@@ -128,6 +194,5 @@ curl -s -H "Authorization: Bearer localmind-demo-token" \
 | **Matter 真接入** | 仅 `pkg/matter` 占位 |
 | **完整用户体系** | 固定 demo token |
 | **离线控制队列** | MVP 不做；offline 直接失败 |
-| **M3 断网清单 / diagnose 写 events** | 下一阶段 |
 
-Agent 与 Ollama 属于 **M2**；M1 仅设备 + MQTT + SQLite 台账。
+Agent 与 Ollama 属于 **M2**；M3 增加断网说明、重启抽检、diagnose/events 与 Demo 文档。

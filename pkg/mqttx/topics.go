@@ -1,5 +1,6 @@
 package mqttx
 
+// MQTT 主题约定（SPEC §3）：localmind/{deviceId}/up|down|ack，Hub 订阅 up/ack、发布 down。
 import (
 	"fmt"
 	"strings"

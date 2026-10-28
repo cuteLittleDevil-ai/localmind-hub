@@ -14,11 +14,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// device 域：SQLite 台账 + Redis 在线/影子 + MQTT 控制闭环（up 合并影子，down 等 ack）。
 const (
 	redisKeyOnlineFmt      = "device:online:%s"
 	redisKeyShadowFmt      = "device:shadow:%s"
+	redisKeyLastSeenFmt    = "device:lastseen:%s"
 	redisKeyIdempotencyFmt = "idempotency:%s"
 	idempotencyTTL         = 10 * time.Minute
+	onlineKeyTTL           = 90 * time.Second
 	defaultControlTimeout  = 5 * time.Second
 )
 
@@ -29,14 +32,25 @@ var (
 	ErrAckFailed      = errors.New("control failed")
 )
 
+// EventRecorder 可选：控制失败等侧效应写入 Mongo events（M3）。
+type EventRecorder interface {
+	InsertEvent(ctx context.Context, deviceID, eventType string, payload map[string]any) (string, error)
+}
+
 // Service implements device domain logic (M1-6).
 type Service struct {
 	store *sqlite.Store
 	rdb   *redis.Client
 	mqtt  *mqttx.Client
+	events EventRecorder
 
 	mu      sync.Mutex
 	pending map[string]chan *mqttx.AckMessage
+}
+
+// SetEventRecorder 注入事件写入（Hub 启动 Mongo 就绪后调用）。
+func (s *Service) SetEventRecorder(rec EventRecorder) {
+	s.events = rec
 }
 
 func NewService(store *sqlite.Store, rdb *redis.Client, mqtt *mqttx.Client) *Service {
@@ -50,6 +64,7 @@ func NewService(store *sqlite.Store, rdb *redis.Client, mqtt *mqttx.Client) *Ser
 }
 
 // StartMQTTHandlers wires uplink processing.
+// 注册 MQTT 上行：up 合并影子写 SQLite/Redis，ack 唤醒控制等待。
 func (s *Service) StartMQTTHandlers() {
 	s.mqtt.SetHandlers(s.handleUp, s.handleAck)
 }
@@ -87,7 +102,9 @@ func (s *Service) handleUp(deviceID string, msg *mqttx.UpMessage) {
 
 	shJSON, _ := json.Marshal(merge)
 	_ = s.rdb.Set(ctx, fmt.Sprintf(redisKeyShadowFmt, id), shJSON, 24*time.Hour).Err()
-	_ = s.rdb.Set(ctx, fmt.Sprintf(redisKeyOnlineFmt, id), "1", 90*time.Second).Err()
+	_ = s.rdb.Set(ctx, fmt.Sprintf(redisKeyOnlineFmt, id), "1", onlineKeyTTL).Err()
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_ = s.rdb.Set(ctx, fmt.Sprintf(redisKeyLastSeenFmt, id), now, 7*24*time.Hour).Err()
 }
 
 func (s *Service) handleAck(_ string, msg *mqttx.AckMessage) {
@@ -112,6 +129,32 @@ func (s *Service) handleAck(_ string, msg *mqttx.AckMessage) {
 func (s *Service) IsOnline(ctx context.Context, deviceID string) bool {
 	v, err := s.rdb.Get(ctx, fmt.Sprintf(redisKeyOnlineFmt, deviceID)).Result()
 	return err == nil && v == "1"
+}
+
+// LastSeen 返回 Redis 记录的最近一次 MQTT up 时间（无记录则 ok=false）。
+func (s *Service) LastSeen(ctx context.Context, deviceID string) (time.Time, bool) {
+	v, err := s.rdb.Get(ctx, fmt.Sprintf(redisKeyLastSeenFmt, deviceID)).Result()
+	if err != nil {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, v)
+	}
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (s *Service) recordEvent(ctx context.Context, deviceID, eventType string, payload map[string]any) {
+	if s.events == nil {
+		return
+	}
+	if payload == nil {
+		payload = map[string]any{}
+	}
+	_, _ = s.events.InsertEvent(ctx, deviceID, eventType, payload)
 }
 
 func (s *Service) GetShadow(ctx context.Context, deviceID string) (map[string]any, error) {
@@ -216,6 +259,12 @@ func (s *Service) Control(ctx context.Context, deviceID string, req *ControlRequ
 		return nil, ErrDeviceNotFound
 	}
 	if !s.IsOnline(ctx, deviceID) {
+		lastSeen, hasLast := s.LastSeen(ctx, deviceID)
+		payload := map[string]any{"reason": "device_offline", "action": req.Action}
+		if hasLast {
+			payload["lastSeenAt"] = lastSeen.UTC().Format(time.RFC3339)
+		}
+		s.recordEvent(ctx, deviceID, "control_fail", payload)
 		return nil, ErrDeviceOffline
 	}
 
@@ -288,6 +337,9 @@ func (s *Service) Control(ctx context.Context, deviceID string, req *ControlRequ
 		res := &ControlResult{
 			CmdID: cmdID, IdempotencyKey: idemKey, OK: false, Code: 408, Message: ErrAckTimeout.Error(),
 		}
+		s.recordEvent(ctx, deviceID, "control_fail", map[string]any{
+			"reason": "ack_timeout", "cmdId": cmdID, "timeoutMs": int(timeout / time.Millisecond),
+		})
 		s.saveIdempotency(ctx, redisIdem, res)
 		return res, ErrAckTimeout
 	case <-ctx.Done():

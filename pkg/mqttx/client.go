@@ -45,6 +45,7 @@ func (c *Client) SetHandlers(onUp UpHandler, onAck AckHandler) {
 }
 
 // Connect dials broker and subscribes to localmind/+/up and localmind/+/ack.
+// 连接 EMQX 后订阅上行与 ack，解码 JSON 后回调 device 域（影子/控制 pending）。
 func (c *Client) Connect() error {
 	opts := mqtt.NewClientOptions().
 		AddBroker(c.broker).
