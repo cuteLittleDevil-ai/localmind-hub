@@ -2,7 +2,7 @@
 
 本地优先的 AIoT Agent 中枢（面试作品集）。设备 MQTT 入网与影子、端侧 LLM 工具控设备、本地台账与会话记忆；详见定稿文档。
 
-当前代码进度：**M2（L2）** — 在 M1 基础上增加 Ollama、`pkg/llm`、`pkg/tools`、Agent 编排、Mongo 会话，以及 `POST /api/v1/agent/chat`。
+当前代码进度：**M3（L3）** — 在 M2 基础上增加断网/重启验收文档、`device.diagnose` 写 Mongo `events`、Demo 包与 `l3-smoke.sh`。
 
 ## 文档
 
@@ -11,7 +11,8 @@
 - [技术规格（docs/SPEC.md）](./docs/SPEC.md)
 - [架构说明（docs/architecture.md）](./docs/architecture.md) — Things 对照与模块边界
 - [业务代码实现计划（docs/IMPLEMENTATION.md）](./docs/IMPLEMENTATION.md) — 里程碑任务拆解
-- **[运行与验收手册（docs/RUNBOOK.md）](./docs/RUNBOOK.md)** — 启动顺序、预期日志、409、L1/L2 验收
+- **[运行与验收手册（docs/RUNBOOK.md）](./docs/RUNBOOK.md)** — 启动顺序、L1/L2/L3、断网与重启抽检
+- **[Demo 包（docs/DEMO.md）](./docs/DEMO.md)** — 一键命令、示例对话、面试要点
 
 ## 快速开始（M1 + M2）
 

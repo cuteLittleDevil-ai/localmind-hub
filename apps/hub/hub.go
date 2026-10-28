@@ -21,6 +21,7 @@ func main() {
 	var c config.Config
 	conf.MustLoad(*configFile, &c)
 
+	// go-zero REST：鉴权中间件 + 设备/Agent 路由，依赖在 ServiceContext 内一次性连线。
 	server := rest.MustNewServer(c.RestConf)
 	server.Use(middleware.AuthMiddleware(c.Auth.DemoToken))
 	defer server.Stop()

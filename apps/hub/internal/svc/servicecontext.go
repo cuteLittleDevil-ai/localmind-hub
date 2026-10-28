@@ -31,6 +31,7 @@ type ServiceContext struct {
 	Agent   *agent.Orchestrator
 }
 
+// NewServiceContext 装配 SQLite / Redis / MQTT / Mongo / Agent，单进程启动四域。
 func NewServiceContext(c config.Config) *ServiceContext {
 	store, err := sqlite.Open(c.Data.SqlitePath)
 	if err != nil {
@@ -70,7 +71,8 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		if err := memStore.EnsureIndexes(ctx); err != nil {
 			log.Printf("mongo indexes: %v", err)
 		}
-		reg := tools.NewRegistry(devices)
+		devices.SetEventRecorder(memStore)
+		reg := tools.NewRegistry(devices, memStore)
 		orchestrator = agent.NewOrchestrator(llmClient, reg, memStore, agent.Config{
 			RequireConfirmForControl: c.Agent.RequireConfirmForControl,
 		})

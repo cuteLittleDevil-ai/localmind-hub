@@ -20,6 +20,7 @@ type Config struct {
 }
 
 // Orchestrator runs ReAct loop: LLM + whitelisted tools.
+// 编排：系统提示 → Ollama → 白名单 tool loop → 会话与 tool 轨迹落 Mongo。
 type Orchestrator struct {
 	llm   *llm.Client
 	tools *tools.Registry
@@ -138,6 +139,6 @@ func systemPrompt() string {
 Demo 设备：deviceId=light-living-01，room=living（客厅灯）。
 用户说「客厅灯」时优先使用 light-living-01。
 调亮度时使用 device.control，params 如 {"brightness":30}（0-100）。
-查询状态用 device.query；不确定在线情况可用 device.diagnose。
+查询状态用 device.query；设备离线、控灯失败或异常时优先 device.diagnose 并依据 hints 向用户说明。
 回复使用简洁中文，并说明实际工具执行结果。相关上下文：%s`, tools.RoomHint())
 }
