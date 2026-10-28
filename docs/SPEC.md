@@ -64,7 +64,8 @@ localmind-hub/
 │   └── k8s/                 # M4 加分
 ├── docs/
 │   ├── PRD.md
-│   └── SPEC.md
+│   ├── SPEC.md
+│   └── architecture.md
 └── REQUIREMENTS.md
 ```
 
