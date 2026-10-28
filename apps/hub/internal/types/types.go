@@ -62,3 +62,31 @@ type ListDevicesResp struct {
 type MessageResp struct {
 	Message string `json:"message"`
 }
+
+// Agent API (SPEC §4.3)
+
+type ChatReq struct {
+	SessionID        string `json:"sessionId"`
+	Message          string `json:"message"`
+	ConfirmDangerous bool   `json:"confirmDangerous"`
+}
+
+type ChatResp struct {
+	SessionID string                   `json:"sessionId"`
+	Reply     string                   `json:"reply"`
+	ToolsUsed []map[string]any         `json:"toolsUsed,omitempty"`
+}
+
+type SessionResp struct {
+	SessionID string           `json:"sessionId"`
+	UserID    string           `json:"userId"`
+	Messages  []SessionMessage `json:"messages"`
+}
+
+type SessionMessage struct {
+	Role      string         `json:"role"`
+	Content   string         `json:"content,omitempty"`
+	ToolName  string         `json:"toolName,omitempty"`
+	ToolArgs  map[string]any `json:"toolArgs,omitempty"`
+	CreatedAt string         `json:"createdAt"`
+}

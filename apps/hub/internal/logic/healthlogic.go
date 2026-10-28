@@ -29,6 +29,7 @@ func (l *HealthLogic) Health() (*types.HealthResp, error) {
 		"mongo":  l.checkMongo(),
 		"mqtt":   l.checkMQTT(),
 		"sqlite": l.checkSQLiteDataDir(),
+		"ollama": l.checkOllama(),
 	}
 
 	status := "ok"
@@ -104,4 +105,16 @@ func (l *HealthLogic) checkSQLiteDataDir() types.Check {
 	_ = os.Remove(testFile)
 
 	return types.Check{OK: true, Message: "data dir writable"}
+}
+
+func (l *HealthLogic) checkOllama() types.Check {
+	if l.svcCtx.LLM == nil {
+		return types.Check{OK: false, Message: "llm client not configured"}
+	}
+	ctx, cancel := context.WithTimeout(l.ctx, 3*time.Second)
+	defer cancel()
+	if err := l.svcCtx.LLM.Ping(ctx); err != nil {
+		return types.Check{OK: false, Message: err.Error()}
+	}
+	return types.Check{OK: true, Message: "models ok"}
 }

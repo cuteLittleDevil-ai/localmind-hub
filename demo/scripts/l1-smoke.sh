@@ -8,12 +8,22 @@ DEVICE_ID="${DEVICE_ID:-light-living-01}"
 AUTH=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
 
 echo "== register device =="
-curl -sf "${AUTH[@]}" -X POST "${HUB_URL}/api/v1/devices" -d "{
+REG_HTTP=$(curl -sS -w "%{http_code}" -o /tmp/l1-register.json "${AUTH[@]}" -X POST "${HUB_URL}/api/v1/devices" -d "{
   \"deviceId\": \"${DEVICE_ID}\",
   \"type\": \"light\",
   \"name\": \"客厅灯\",
   \"room\": \"living\"
-}" | jq .
+}")
+if [[ "${REG_HTTP}" == "409" ]]; then
+  echo "device already registered (409), continuing"
+  jq . /tmp/l1-register.json 2>/dev/null || true
+elif [[ "${REG_HTTP}" =~ ^2 ]]; then
+  jq . /tmp/l1-register.json
+else
+  echo "register failed HTTP ${REG_HTTP}" >&2
+  cat /tmp/l1-register.json >&2
+  exit 1
+fi
 
 echo "== wait for online uplink =="
 for i in $(seq 1 20); do

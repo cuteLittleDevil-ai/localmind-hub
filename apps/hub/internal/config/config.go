@@ -10,6 +10,8 @@ type Config struct {
 	Redis RedisConf
 	Mongo MongoConf
 	Mqtt  MqttConf
+	Ollama OllamaConf
+	Agent  AgentConf
 }
 
 type AuthConf struct {
@@ -31,4 +33,13 @@ type MongoConf struct {
 
 type MqttConf struct {
 	Broker string `json:",default=tcp://127.0.0.1:1883"`
+}
+
+type OllamaConf struct {
+	BaseURL string `json:",default=http://127.0.0.1:11434/v1"`
+	Model   string `json:",default=qwen2.5:3b"`
+}
+
+type AgentConf struct {
+	RequireConfirmForControl bool `json:",default=false"`
 }

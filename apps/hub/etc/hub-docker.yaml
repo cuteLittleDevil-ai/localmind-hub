@@ -18,3 +18,10 @@ Mongo:
 
 Mqtt:
   Broker: tcp://emqx:1883
+
+Ollama:
+  BaseURL: http://ollama:11434/v1
+  Model: qwen2.5:3b
+
+Agent:
+  RequireConfirmForControl: false
